@@ -7,15 +7,7 @@ import (
 	"sync"
 )
 
-var defaultConfig = Config{
-	DevMode:    true, // 开发者模式
-	CallerSkip: 3,
-	Filepath:   "../log/", // 日志文件夹路径
-	MaxSize:    10,        // 单个日志文件最大Size
-	MaxBackups: 5,         // 最多同时保留的日志数量,0是全部
-	MaxAge:     2,         // 日志保留的持续天数，0是永久
-	Compress:   false,     // 日志文件是否用zip压缩
-}
+const QUEUE_SIZE = 1024 * 64
 
 type Logger struct {
 	logger         *zap.Logger
@@ -27,16 +19,14 @@ type Logger struct {
 
 func NewLogger(cfg *Config) *Logger {
 	var logger = &Logger{
-		msgChan: make(chan *MsgEntity, 1024*4),
+		msgChan: make(chan *MsgEntity, QUEUE_SIZE),
 	}
 	if cfg == nil {
 		cfg = &defaultConfig
 	}
 	logger.callerSkip = cfg.CallerSkip
 	logger.fileDebugLevel = atomic.NewBool(cfg.DevMode)
-	var fileCores = createFileCore(cfg, logger.fileDebugLevel)
-	var kafkaCores = createKafkaCore(cfg)
-	var cores = append(fileCores, kafkaCores...)
+	var cores = createFileCore(cfg, logger.fileDebugLevel)
 	if cfg.DevMode {
 		var consoleCores = createConsoleCore(cfg)
 		cores = append(cores, consoleCores...)

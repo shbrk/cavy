@@ -17,8 +17,6 @@ type Config struct {
 	MaxBackups int      // 最多同时保留的日志数量,0是全部
 	MaxAge     int      // 日志保留的持续天数，0是永久
 	Compress   bool     // 日志文件是否用zip压缩
-	KafkaAddr  []string //启用kafka的地址,为nil或者空的时候不启用
-	KafkaTopic string   // kafka话题
 }
 
 func createFileCore(cfg *Config, fileDebugFlag *atomic.Bool) []zapcore.Core {
@@ -71,16 +69,4 @@ func createConsoleCore(cfg *Config) []zapcore.Core {
 	return []zapcore.Core{
 		zapcore.NewCore(encoder, consoleDebugging, zapcore.DebugLevel),
 	}
-}
-
-func createKafkaCore(cfg *Config) []zapcore.Core {
-	var cores = make([]zapcore.Core, 0, 1)
-	if cfg.KafkaAddr == nil || len(cfg.KafkaAddr) == 0 {
-		return cores
-	}
-	var kl = newKafkaLogger(cfg.KafkaAddr, cfg.KafkaTopic)
-	kafkaWriter := zapcore.AddSync(kl)
-	kafkaEncoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
-	cores = append(cores, zapcore.NewCore(kafkaEncoder, kafkaWriter, zapcore.InfoLevel))
-	return cores
 }

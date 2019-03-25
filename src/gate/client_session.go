@@ -38,7 +38,7 @@ func (c *ClientSession) IsHeartBeatPacket(opCode uint16) bool {
 }
 
 func (c *ClientSession) SendMsg(opCode uint16, msg proto.Message) {
-	err := c.Send(net.NewPacket(opCode,msg))
+	err := c.Send(net.NewPacket(opCode,msg,0))
 	if err != nil {
 		log.Error("[CLIENT_SESSION]：send message error", log.NamedError("err", err))
 	}
