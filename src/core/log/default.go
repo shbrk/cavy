@@ -1,5 +1,7 @@
 package log
 
+import "go.uber.org/zap"
+
 //包默认日志对象
 var logger *Logger
 
@@ -17,6 +19,10 @@ func InitDefaultLogger(cfg *Config) {
 	if logger == nil {
 		logger = NewLogger(cfg)
 	}
+}
+
+func GetRaw() *zap.Logger {
+	return logger.logger
 }
 
 func Debug(msg string, fields ...Field) {

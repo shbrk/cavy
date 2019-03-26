@@ -2,7 +2,6 @@ package share
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 )
@@ -19,7 +18,7 @@ type environment struct {
 	LogPath  string   // 日志路径
 	AreaID   int      // 区服ID
 	Gate     bool     // 是否启动gate
-	GS       bool     // 是否启动gs
+	Game     bool     // 是否启动game
 }
 
 var Env environment
@@ -37,22 +36,13 @@ func init() {
 	flag.StringVar(&Env.LogPath, "l", "", "日志路径")
 	flag.IntVar(&Env.AreaID, "aid", 10000, "区服ID")
 	flag.BoolVar(&Env.Gate, "gate", false, "是否启动gate")
-	flag.BoolVar(&Env.GS, "gs", false, "是否启动gs")
+	flag.BoolVar(&Env.Game, "game", false, "是否启动game")
 }
 
 func ParseEnvironment() {
 	flag.Parse()
 	if help || Env.BootID == 0 {
 		PrintHelpAndExit()
-	}
-	if Env.LogPath == "" {
-		if Env.GS {
-			Env.LogPath = fmt.Sprintf("../log/gs-%d", Env.BootID)
-		} else if Env.Gate {
-			Env.LogPath = fmt.Sprintf("../log/gate-%d", Env.BootID)
-		} else {
-			Env.LogPath = fmt.Sprintf("../log/node-%d", Env.BootID)
-		}
 	}
 }
 

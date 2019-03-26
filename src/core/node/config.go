@@ -19,12 +19,12 @@ type GateInfoConfig struct {
 	OnlineNum     int `json:"online_num"`
 }
 
-// gs watch的节点信息
+// game watch的节点信息
 type GSDynamicConfig struct {
 	DebugLevelLog bool `json:"debug_level_log"`
 }
 
-// gs keepalive的节点信息
+// game keepalive的节点信息
 type GSAliveConfig struct {
 	RunVersion string `json:"run_version"`
 }

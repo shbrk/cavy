@@ -25,6 +25,7 @@ type Client struct {
 	chanOut chan Event
 }
 
+
 func NewClient(cfg *Config) (*Client, error) {
 	var client = &Client{
 		timeout: DEFAULT_TIME_OUT,

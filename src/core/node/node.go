@@ -12,6 +12,6 @@ type Base struct {
 
 type Node interface {
 	Name() string
-	Init() error
+	Init()
 	Run()
 }

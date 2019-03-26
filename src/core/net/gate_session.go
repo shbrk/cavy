@@ -52,7 +52,7 @@ func (g *GateSession) Close(err error) {
 }
 
 func (g *GateSession) GetHeartBeatPacket() *Packet {
-	return NewPacket(uint16(OP_S2G_HEART_BEAT), nil,0)
+	return NewPacket(uint16(OP_S2G_HEART_BEAT), nil, 0)
 }
 func (g *GateSession) IsHeartBeatPacket(opCode uint16) bool {
 	return opCode == uint16(OP_G2S_HEART_BEAT)
