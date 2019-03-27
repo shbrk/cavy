@@ -2,6 +2,7 @@ package net
 
 import (
 	"core/log"
+	"fmt"
 	"net"
 	"sync/atomic"
 	"time"
@@ -38,6 +39,10 @@ func (t *TCPServer) ListenAndServe() error {
 	t.ln = ln.(*net.TCPListener)
 	go t.accept()
 	return nil
+}
+
+func (t *TCPServer)Addr() string {
+	return fmt.Sprintf("%s:%d",t.IP.String(),t.Port)
 }
 
 func (t *TCPServer) Run() {
@@ -94,6 +99,6 @@ func (t *TCPServer) accept() {
 }
 
 func (t *TCPServer) newConn(conn *net.TCPConn) {
-	NewTCPConnection(conn, t.sessionManager.CreateSession(nil), t.cfg.WriteQueueSize,
+	NewTCPConnection(conn, t.sessionManager.CreateSession(), t.cfg.WriteQueueSize,
 		t.cfg.ReadBufferSize, t.cfg.WriteBufferSize, t.cfg.ReadTimeout)
 }

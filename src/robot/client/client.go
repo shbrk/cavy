@@ -18,16 +18,18 @@ type Client struct {
 }
 
 func (c *Client) Connect(addr string) {
+	sessionManager := NewClientSessionManager()
 	c.netClient = net.NewTCPClient(5*time.Second, &net.ConnConfig{
 		ReadBufferSize:  128 * 1024,
 		WriteBufferSize: 128 * 1024,
 		WriteQueueSize:  8 * 1024,
-	}, NewClientSessionManager())
-	session, err := c.netClient.SyncConnect(addr, time.Second*5, 1)
+	}, sessionManager)
+	session := NewClientSession(uint64(c.ID),sessionManager)
+	err := c.netClient.SyncConnect(addr, time.Second*5, session)
 	if err != nil {
 		log.Fatal("connect error", log.NamedError("err", err))
 	}
-	c.session = session.(*ClientSession)
+	c.session = session
 }
 
 func (c *Client) SendMsg(opCode uint16, msg proto.Message) {

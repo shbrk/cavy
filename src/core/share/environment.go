@@ -33,7 +33,7 @@ func init() {
 	flag.StringVar(&Env.EtcdUsr, "u", "", "etcd用户名")
 	flag.StringVar(&Env.EtcdPwd, "p", "", "etcd用户名")
 	flag.StringVar(&Env.Version, "v", "0.0.1", "版本号")
-	flag.StringVar(&Env.LogPath, "l", "", "日志路径")
+	flag.StringVar(&Env.LogPath, "l", "./log/", "日志路径")
 	flag.IntVar(&Env.AreaID, "aid", 10000, "区服ID")
 	flag.BoolVar(&Env.Gate, "gate", false, "是否启动gate")
 	flag.BoolVar(&Env.Game, "game", false, "是否启动game")

@@ -7,8 +7,8 @@ import (
 )
 
 type connectOp struct {
-	addr string
-	ctx  interface{}
+	addr    string
+	session ISession
 }
 
 func NewTCPClient(timeout time.Duration, cfg *ConnConfig, sessionManager ISessionManager) *TCPClient {
@@ -28,13 +28,13 @@ type TCPClient struct {
 
 func (t *TCPClient) init() {
 	//为sessionManager绑定重连回调函数
-	t.sessionManager.SetConnectFunc(func(addr string, ctx interface{}) {
-		t.Connect(addr, ctx)
+	t.sessionManager.SetConnectFunc(func(addr string, session ISession) {
+		t.Connect(addr, session)
 	})
 	go func() {
 		for {
 			co := <-t.connChan
-			_, err := t.SyncConnect(co.addr, t.timeout, co.ctx)
+			err := t.SyncConnect(co.addr, t.timeout, co.session)
 			if err != nil {
 				log.Error("[TCPClient]:tcp connect error", log.NamedError("err", err))
 			}
@@ -53,23 +53,22 @@ func (t *TCPClient) GetSessionManager() ISessionManager {
 	return t.sessionManager
 }
 
-func (t *TCPClient) Connect(addr string, ctx interface{}) {
-	t.connChan <- &connectOp{addr, ctx}
+func (t *TCPClient) Connect(addr string, session ISession) {
+	t.connChan <- &connectOp{addr, session}
 }
 
-func (t *TCPClient) SyncConnect(addr string, timeout time.Duration, ctx interface{}) (ISession, error) {
+func (t *TCPClient) SyncConnect(addr string, timeout time.Duration, session ISession) error {
 	d := net.Dialer{Timeout: timeout}
 	conn, err := d.Dial("tcp", addr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	tcpConn, _ := conn.(*net.TCPConn)
-	return t.newConn(tcpConn, ctx), nil
+	t.newConn(tcpConn, session)
+	return nil
 }
 
-func (t *TCPClient) newConn(conn *net.TCPConn, ctx interface{}) ISession {
-	session := t.sessionManager.CreateSession(ctx)
-	NewTCPConnection(conn, session, t.cfg.WriteQueueSize,
-		t.cfg.ReadBufferSize, t.cfg.WriteBufferSize, t.cfg.ReadTimeout)
-	return session
+func (t *TCPClient) newConn(conn *net.TCPConn, session ISession) {
+	NewTCPConnection(conn, session, t.cfg.WriteQueueSize, t.cfg.ReadBufferSize,
+		t.cfg.WriteBufferSize, t.cfg.ReadTimeout)
 }

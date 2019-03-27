@@ -10,6 +10,8 @@ import (
 // server ----> gate
 //管理所有后端服务器对gate的连接
 
+const MAX_RECONNECT_COUNT = 20
+
 func NewGateSession(id uint64, manager *GateSessionManager) *GateSession {
 	session := &GateSession{sessionID: id}
 	baseSession := NewBaseSession(manager, session)
@@ -32,16 +34,30 @@ func (g *GateSession) PreWriteHook(p *Packet) {
 	PreWriteInternalHook(p)
 }
 
-func (g *GateSession) StartReconnect(interval time.Duration, cb func(addr string)) {
+func (g *GateSession) StartReconnect(interval time.Duration, cb func(addr string), fail func(count int)) {
 	g.isReconnecting = true
 	var nextInterval = interval
 	var reconnectCount = 0
 	g.reconnectTimer = time.AfterFunc(nextInterval, func() {
 		nextInterval = nextInterval * 2
 		reconnectCount += 1
+		if reconnectCount > MAX_RECONNECT_COUNT {
+			g.StopReconnect()
+			fail(reconnectCount)
+		}
 		g.reconnectTimer.Reset(nextInterval)
 		cb(g.remoteAddr)
 	})
+}
+
+func (g *GateSession) StopReconnect() {
+	if !g.isReconnecting {
+		return
+	}
+	if g.reconnectTimer != nil {
+		g.reconnectTimer.Stop()
+		g.reconnectTimer = nil
+	}
 }
 
 func (g *GateSession) Close(err error) {
@@ -94,13 +110,12 @@ type ISessionConsumer interface {
 type GateSessionManager struct {
 	*BaseSessionManager
 	sessions          map[uint64]*GateSession
-	connectFunc       func(addr string, ctx interface{})
+	connectFunc       func(addr string, session ISession)
 	reconnectInterval time.Duration
 }
 
-func (m *GateSessionManager) CreateSession(ctx interface{}) ISession {
-	id := ctx.(int)
-	return NewGateSession(uint64(id), m)
+func (m *GateSessionManager) CreateSession() ISession {
+	return nil
 }
 
 func (m *GateSessionManager) AddSession(session *GateSession) {
@@ -110,45 +125,63 @@ func (m *GateSessionManager) RemoveSession(session *GateSession) {
 	delete(m.sessions, session.sessionID)
 }
 
-func (m *GateSessionManager) SetConnectFunc(cb func(addr string, ctx interface{})) {
+func (m *GateSessionManager) SetConnectFunc(cb func(addr string, session ISession)) {
 	m.connectFunc = cb
 }
 
 func (m *GateSessionManager) HandleEtcdEventPut(bootID int, addr string) {
-	if session := m.GetSession(uint64(bootID)); session != nil {
-		log.Error("[SESSION]:etcd new put has duplicate id", log.Int("bootID", bootID))
-		return
-	}
-	m.connectFunc(addr, bootID)
+	//if session := m.GetSession(uint64(bootID)); session != nil {
+	//	log.Error("[GATE_SESSION]:etcd new put has duplicate id", log.Int("bootID", bootID))
+	//	return
+	//}
+	m.connectFunc(addr, NewGateSession(uint64(bootID), m))
 }
 
 func (m *GateSessionManager) HandleEtcdEventDelete(booID int) {
-	log.Warn("[SESSION]: etcd node is down", log.Int("bootID", booID))
+	log.Warn("[GATE_SESSION]: etcd node is down", log.Int("bootID", booID))
+	//if session := m.GetSession(uint64(booID)); session != nil {
+	//	session.Close(errors.New("etcd node is down"))
+	//	m.RemoveSession(session)
+	//}
 }
 
 func (m *GateSessionManager) HandleNewSessionEvent(session ISession) {
 	gateSession, _ := session.(*GateSession)
 	if oldSession := m.GetSession(gateSession.sessionID); oldSession != nil {
-		if oldSession.isReconnecting {
-			oldSession.Close(errors.New("reconnect new session success"))
+		if oldSession == gateSession { // 已经存在的session
+			if oldSession.isReconnecting {
+				log.Info("[GATE_SESSION]：reconnect succeed", log.String("localAddr", session.LocalAddr()),
+					log.String("remoteAddr", session.RemoteAddr()))
+				oldSession.StopReconnect()
+			} else { // 可能是延迟比较大 多次重连结果都连接成功
+				log.Warn("reconnect maybe to make connection twice", log.String("localAddr", session.LocalAddr()),
+					log.String("remoteAddr", session.RemoteAddr()))
+			}
 		} else {
-			gateSession.Close(errors.New("[SESSION]: new session has duplicate id"))
-			log.Error("[SESSION]: new session has duplicate id", log.Uint64("sessionID", gateSession.sessionID))
-			return
+			if oldSession.isReconnecting { // 可能是对方重启了ID没变 addr变了
+				oldSession.Close(errors.New("[GATE_SESSION]:new session has duplicate id,may same remote changed addr"))
+			} else {
+				gateSession.Close(errors.New("[GATE_SESSION]: new session has duplicate id"))
+				log.Error("[GATE_SESSION]: new session has duplicate id", log.Uint64("sessionID", gateSession.sessionID))
+				return
+			}
 		}
 	} else {
-		log.Info("[SESSION]: new session ", log.String("localAddr", session.LocalAddr()),
+		log.Info("[GATE_SESSION]: new session ", log.String("localAddr", session.LocalAddr()),
 			log.String("remoteAddr", session.RemoteAddr()))
 	}
 	m.AddSession(gateSession)
 }
 func (m *GateSessionManager) HandleSessionClosedEvent(session ISession, err error) {
 	gateSession, _ := session.(*GateSession)
-	log.Info("[SESSION]: session closed", log.String("localAddr", session.LocalAddr()),
+	log.Info("[GATE_SESSION]: session closed", log.String("localAddr", session.LocalAddr()),
 		log.String("remoteAddr", session.RemoteAddr()), log.NamedError("error", err))
 	if m.GetSession(gateSession.sessionID) != nil { //如果逻辑层没有移除session 自动重连
 		gateSession.StartReconnect(m.reconnectInterval, func(addr string) {
-			m.connectFunc(addr, int(gateSession.sessionID))
+			m.connectFunc(addr, gateSession)
+			log.Info("[GATE_SESSION]:try reconnect :" + addr)
+		}, func(count int) {
+			log.Error("[GATE_SESSION]: auto reconnect failed", log.Int("tryCount", count))
 		})
 	}
 }

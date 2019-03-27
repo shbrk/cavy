@@ -68,7 +68,7 @@ type ClientSessionManager struct {
 	autoIncrementID uint64
 }
 
-func (m *ClientSessionManager) CreateSession(ctx interface{}) net.ISession {
+func (m *ClientSessionManager) CreateSession() net.ISession {
 	atomic.AddUint64(&m.autoIncrementID, 1)
 	return NewClientSession(m.autoIncrementID, m)
 }
@@ -82,13 +82,13 @@ func (m *ClientSessionManager) RemoveSession(session *ClientSession) {
 
 func (m *ClientSessionManager) HandleNewSessionEvent(session net.ISession) {
 	clientSession, _ := session.(*ClientSession)
-	log.Info("[SESSION]: new session ", log.String("localAddr", session.LocalAddr()),
+	log.Info("[CLIENT_SESSION]: new session ", log.String("localAddr", session.LocalAddr()),
 		log.String("remoteAddr", session.RemoteAddr()))
 	m.AddSession(clientSession)
 }
 func (m *ClientSessionManager) HandleSessionClosedEvent(session net.ISession, err error) {
 	clientSession, _ := session.(*ClientSession)
-	log.Info("[SESSION]: session closed", log.String("localAddr", session.LocalAddr()),
+	log.Info("[CLIENT_SESSION]: session closed", log.String("localAddr", session.LocalAddr()),
 		log.String("remoteAddr", session.RemoteAddr()), log.NamedError("error", err))
 	clientSession.Close(err)
 	m.RemoveSession(clientSession)

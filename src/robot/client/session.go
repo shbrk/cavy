@@ -92,7 +92,7 @@ type ClientSessionManager struct {
 	autoIncrementID uint64
 }
 
-func (m *ClientSessionManager) CreateSession(ctx interface{}) net.ISession {
+func (m *ClientSessionManager) CreateSession() net.ISession {
 	atomic.AddUint64(&m.autoIncrementID, 1)
 	return NewClientSession(m.autoIncrementID, m)
 }

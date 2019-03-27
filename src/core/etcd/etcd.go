@@ -90,13 +90,13 @@ func (c *Client) KeepAlive(key string, value string, timeout int64, onErrorCallb
 
 //监控一个key的变动 withPrefix打开后监听的是文件夹 onEventCB是事件触发后执行的回调函数
 func (c *Client) Watch(key string, withPrefix bool, onEventCallback func(err error, eventType EventType, key string, value string)) {
-	var wc clientv3.WatchChan
-	if withPrefix {
-		wc = c.client.Watch(context.TODO(), key, clientv3.WithPrefix(), clientv3.WithPrevKV())
-	} else {
-		wc = c.client.Watch(context.TODO(), key)
-	}
 	go func() {
+		var wc clientv3.WatchChan
+		if withPrefix {
+			wc = c.client.Watch(context.TODO(), key, clientv3.WithPrefix(), clientv3.WithPrevKV())
+		} else {
+			wc = c.client.Watch(context.TODO(), key)
+		}
 		for {
 			ws, ok := <-wc
 			if !ok || ws.Canceled {
@@ -105,7 +105,7 @@ func (c *Client) Watch(key string, withPrefix bool, onEventCallback func(err err
 				return
 			} else {
 				for _, e := range ws.Events {
-					event := &WatchEvent{Type: EventType(e.Type), Key: string(e.Kv.Key), Func: onEventCallback}
+					event := &WatchEvent{Type: EventType(e.Type), Key: string(e.Kv.Key),Value:string(e.Kv.Value),Func: onEventCallback}
 					c.chanOut <- event
 				}
 			}

@@ -33,14 +33,6 @@ func (n *NodeGame) Name() string {
 }
 
 func (n *NodeGame) Init() {
-	log.InitDefaultLogger(&log.Config{
-		DevMode:    share.Env.DevMode,
-		Filepath:   share.Env.LogPath,
-		MaxSize:    20,
-		MaxBackups: 20,
-		MaxAge:     5,
-		CallerSkip: 3,
-	})
 	n.timerManager = share.NewTimerManager()
 	cli, err := etcd.NewClient(&etcd.Config{
 		Endpoints: share.Env.EtcdAddr,
@@ -50,7 +42,7 @@ func (n *NodeGame) Init() {
 	})
 	checkErr(err, "[GAME]:etcd client create error")
 	n.etcdClient = cli
-	aliveKey := path.Join(share.Env.EtcdRoot, strconv.Itoa(share.Env.AreaID), share.ETCD_GS_PATH, share.ETCD_ALIVE_PATH,
+	aliveKey := path.Join(share.Env.EtcdRoot, strconv.Itoa(share.Env.AreaID), share.ETCD_GAME_PATH, share.ETCD_ALIVE_PATH,
 		strconv.Itoa(share.Env.BootID))
 	exist, _, err := n.etcdClient.SyncGet(aliveKey)
 	checkErr(err, "[GAME]:etcd get key error："+aliveKey)
@@ -74,7 +66,8 @@ func (n *NodeGame) Init() {
 		gateConfig := &node.GateAliveConfig{}
 		checkErr(json.Unmarshal([]byte(values[index]), gateConfig), "[GAME]:parse json error")
 		addr := fmt.Sprintf("%s:%d", gateConfig.InternalIP, gateConfig.InternalPort)
-		_, err = n.internalClient.SyncConnect(addr, 5*time.Second, gateConfig.BootID)
+		newSession := net.NewGateSession(uint64(gateConfig.BootID),n.internalClient.GetSessionManager().(*net.GateSessionManager))
+		err = n.internalClient.SyncConnect(addr, 5*time.Second, newSession)
 		checkErr(err, "[GAME]:connect gate error")
 	}
 	checkErr(n.etcdKeepAlive(), "[GAME]:keep alive error")
@@ -82,7 +75,7 @@ func (n *NodeGame) Init() {
 }
 
 func (n *NodeGame) readEtcdConfig() error {
-	commonConfigKey := path.Join(share.Env.EtcdRoot, share.ETCD_GS_PATH)
+	commonConfigKey := path.Join(share.Env.EtcdRoot, share.ETCD_GAME_PATH)
 	exist, value, err := n.etcdClient.SyncGet(commonConfigKey)
 	if err != nil {
 		return err
@@ -93,7 +86,7 @@ func (n *NodeGame) readEtcdConfig() error {
 	if err := ParseCommonConfig(value); err != nil {
 		return err
 	}
-	configKey := path.Join(share.Env.EtcdRoot, share.ETCD_GS_PATH, strconv.Itoa(share.Env.AreaID),
+	configKey := path.Join(share.Env.EtcdRoot, share.ETCD_GAME_PATH, strconv.Itoa(share.Env.AreaID),
 		share.ETCD_CONFIG_PATH, strconv.Itoa(share.Env.BootID))
 	exist, value, err = n.etcdClient.SyncGet(configKey)
 	if err != nil {
@@ -109,7 +102,7 @@ func (n *NodeGame) readEtcdConfig() error {
 }
 
 func (n *NodeGame) etcdKeepAlive() error {
-	aliveKey := path.Join(share.Env.EtcdRoot, share.ETCD_GS_PATH, strconv.Itoa(share.Env.AreaID),
+	aliveKey := path.Join(share.Env.EtcdRoot, share.ETCD_GAME_PATH, strconv.Itoa(share.Env.AreaID),
 		share.ETCD_ALIVE_PATH, strconv.Itoa(share.Env.BootID))
 	var aliveConfig = &node.GSAliveConfig{
 		RunVersion: share.Env.Version,
@@ -129,7 +122,7 @@ func (n *NodeGame) etcdKeepAlive() error {
 	return nil
 }
 func (n *NodeGame) etcdWatch() {
-	var dynamicKey = path.Join(share.Env.EtcdRoot, share.ETCD_GS_PATH, strconv.Itoa(share.Env.AreaID),
+	var dynamicKey = path.Join(share.Env.EtcdRoot, share.ETCD_GAME_PATH, strconv.Itoa(share.Env.AreaID),
 		share.ETCD_DYNAMIC_PATH, strconv.Itoa(share.Env.BootID))
 	n.etcdClient.Watch(dynamicKey, false, func(err error, eventType etcd.EventType, key string, value string) {
 		if err != nil {

@@ -45,7 +45,7 @@ func (n *NodeGate) Init() {
 	exist, _, err := n.etcdClient.SyncGet(aliveKey)
 	checkErr("[GATE]:etcd get key error："+aliveKey, err)
 	if exist {
-		Logger.Fatal("[GATE]:alive key already exists", log.String("key", aliveKey))
+		log.Fatal("[GATE]:alive key already exists", log.String("key", aliveKey))
 	}
 	checkErr("[GATE]:read etcd config error", n.readEtcdConfig())
 
@@ -56,6 +56,7 @@ func (n *NodeGate) Init() {
 		WriteQueueSize:  CommonConfig.WriteQueueSize,
 	}, NewClientSessionManager())
 	checkErr("[GATE]:public server listen error", n.publicServer.ListenAndServe())
+	log.Info("[GATE]:server listen for client at "+n.publicServer.Addr())
 
 	n.internalServer = net.NewTCPServer(":0", &net.ConnConfig{
 		ReadBufferSize:  CommonConfig.ReadBufferSize,
@@ -63,7 +64,7 @@ func (n *NodeGate) Init() {
 		WriteQueueSize:  CommonConfig.WriteQueueSize,
 	}, NewServerSessionManager())
 	checkErr("[GATE]:internal server listen error", n.internalServer.ListenAndServe())
-
+	log.Info("[GATE]:server listen for internal at "+n.internalServer.Addr())
 	checkErr("[GATE]:etcd keep alive error", n.etcdKeepAlive())
 	n.etcdWatch()
 }
@@ -85,7 +86,7 @@ func (n *NodeGate) etcdKeepAlive() error {
 	}
 	n.etcdClient.KeepAlive(aliveKey, string(jsonStr), int64(CommonConfig.EtcdTimeout), func(err error, key string) {
 		if n.keepAliveRetry < 10 {
-			Logger.Error("[ETCD] keep alive failed,retrying", log.String("key", key),
+			log.Error("[ETCD] keep alive failed,retrying", log.String("key", key),
 				log.Int("retry_count", n.keepAliveRetry))
 		}
 		n.keepAliveRetry++
@@ -99,7 +100,7 @@ func (n *NodeGate) etcdWatch() {
 	var dynamicKey = path.Join(share.Env.EtcdRoot, share.ETCD_GATE_PATH, share.ETCD_DYNAMIC_PATH, strconv.Itoa(share.Env.BootID))
 	n.etcdClient.Watch(dynamicKey, false, func(err error, eventType etcd.EventType, key string, value string) {
 		if err != nil {
-			Logger.Error("[ETCD] keep alive failed,retrying", log.String("key", key),
+			log.Error("[ETCD] keep alive failed,retrying", log.String("key", key),
 				log.NamedError("err", err))
 			return
 		}
@@ -107,7 +108,7 @@ func (n *NodeGate) etcdWatch() {
 			var config = &node.GateDynamicConfig{}
 			err := json.Unmarshal([]byte(value), config)
 			if err != nil {
-				Logger.Error("[ETCD] keep alive failed,retrying", log.String("key", key),
+				log.Error("[ETCD] keep alive failed,retrying", log.String("key", key),
 					log.NamedError("err", err), log.String("value", value))
 				return
 			}
@@ -169,7 +170,7 @@ func (n *NodeGate) GetClientSession(sessionID uint64) *ClientSession {
 func (n *NodeGate) stop() {
 	n.publicServer.Close()
 	n.internalServer.Close()
-	Logger.Info(n.Name() + " done!")
+	log.Info(n.Name() + " done!")
 }
 
 func (n *NodeGate) Run() {
@@ -191,6 +192,6 @@ func (n *NodeGate) Run() {
 
 func checkErr(msg string, err error) {
 	if err != nil {
-		Logger.Fatal(msg, log.NamedError("err", err))
+		log.Fatal(msg, log.NamedError("err", err))
 	}
 }

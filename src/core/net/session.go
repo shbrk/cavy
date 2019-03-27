@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"time"
 )
 
@@ -56,6 +57,9 @@ func (s *BaseSession) startHeartBeat() {
 }
 
 func (s *BaseSession) Bind(c Connection) {
+	if s.conn != nil {
+		s.conn.Close(errors.New("rebind new connection,so close old connection "))
+	}
 	s.conn = c
 	s.remoteAddr = s.conn.RemoteAddr()
 	s.localAddr = s.conn.LocalAddr()
@@ -64,7 +68,10 @@ func (s *BaseSession) Bind(c Connection) {
 
 func (s *BaseSession) Send(p *Packet) error {
 	s.heartBeatTimer.Reset(s.heartBeatInterval) // 如果有新的包要发送，可以重置心跳包的发送间隔
-	return s.conn.Send(p)
+	if s.conn != nil {
+		return s.conn.Send(p)
+	}
+	return nil
 }
 
 func (s *BaseSession) HandleEvent(event *SessionEvent) {
@@ -83,11 +90,11 @@ func (s *BaseSession) Close(err error) {
 }
 
 func (s *BaseSession) RemoteAddr() string {
-	return s.conn.RemoteAddr()
+	return s.remoteAddr
 }
 
 func (s *BaseSession) LocalAddr() string {
-	return s.conn.LocalAddr()
+	return s.localAddr
 }
 
 type ISessionEventHandler interface {
@@ -97,11 +104,11 @@ type ISessionEventHandler interface {
 }
 
 type ISessionManager interface {
-	Run()                                                 // 循环调用接口
-	HandleEvent(event *SessionEvent)                      // 处理事件接口
-	SetConnectFunc(cb func(addr string, ctx interface{})) // 设置重连回调,客户端连接才需要
-	CreateSession(ctx interface{}) ISession               // 创建session
-	Close(err error)                                      // 关闭
+	Run()                                                  // 循环调用接口
+	HandleEvent(event *SessionEvent)                       // 处理事件接口
+	SetConnectFunc(cb func(addr string, session ISession)) // 设置重连回调,客户端连接才需要
+	CreateSession() ISession                               // 创建session
+	Close(err error)                                       // 关闭
 }
 
 func NewBaseSessionManager(handler ISessionEventHandler) *BaseSessionManager {
@@ -132,7 +139,7 @@ func (m *BaseSessionManager) Run() {
 }
 
 //设置重连函数 客户端连接才需要设置这个接口
-func (m *BaseSessionManager) SetConnectFunc(cb func(addr string, ctx interface{})) {
+func (m *BaseSessionManager) SetConnectFunc(cb func(addr string, session ISession)) {
 }
 
 func (m *BaseSessionManager) HandleEvent(event *SessionEvent) {
