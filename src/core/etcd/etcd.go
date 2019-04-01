@@ -22,7 +22,7 @@ type Client struct {
 	client  *clientv3.Client
 	timeout time.Duration
 	chanIn  chan Op
-	chanOut chan Event
+	ChanOut chan Event
 }
 
 
@@ -30,7 +30,7 @@ func NewClient(cfg *Config) (*Client, error) {
 	var client = &Client{
 		timeout: DEFAULT_TIME_OUT,
 		chanIn:  make(chan Op, IN_CHANNEL_SIZE),
-		chanOut: make(chan Event, OUT_CHANNEL_SIZE),
+		ChanOut: make(chan Event, OUT_CHANNEL_SIZE),
 	}
 	if cfg.Timeout != 0 {
 		client.timeout = time.Duration(cfg.Timeout) * time.Second
@@ -81,7 +81,7 @@ func (c *Client) KeepAlive(key string, value string, timeout int64, onErrorCallb
 			_, ok := <-ch
 			if !ok {
 				event := &KeepAliveEvent{Err: errors.New("keep alive closed"), Key: key, Func: onErrorCallback}
-				c.chanOut <- event
+				c.ChanOut <- event
 			}
 		}
 	}()
@@ -101,12 +101,12 @@ func (c *Client) Watch(key string, withPrefix bool, onEventCallback func(err err
 			ws, ok := <-wc
 			if !ok || ws.Canceled {
 				event := &WatchEvent{Err: errors.New("watch closed"), Key: key, Func: onEventCallback}
-				c.chanOut <- event
+				c.ChanOut <- event
 				return
 			} else {
 				for _, e := range ws.Events {
 					event := &WatchEvent{Type: EventType(e.Type), Key: string(e.Kv.Key),Value:string(e.Kv.Value),Func: onEventCallback}
-					c.chanOut <- event
+					c.ChanOut <- event
 				}
 			}
 		}

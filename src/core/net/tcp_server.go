@@ -45,10 +45,6 @@ func (t *TCPServer)Addr() string {
 	return fmt.Sprintf("%s:%d",t.IP.String(),t.Port)
 }
 
-func (t *TCPServer) Run() {
-	t.sessionManager.Run()
-}
-
 func (t *TCPServer) Close() {
 	if t.IsClosed() {
 		return

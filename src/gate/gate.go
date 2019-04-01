@@ -15,12 +15,16 @@ import (
 	"time"
 )
 
+
+
 type NodeGate struct {
 	node.Base
-	etcdClient     *etcd.Client
-	publicServer   *net.TCPServer
-	internalServer *net.TCPServer
-	keepAliveRetry int
+	etcdClient           *etcd.Client
+	publicServer         *net.TCPServer        // 面向客户端的Server
+	internalServer       *net.TCPServer        // 面向内部连接的Server
+	clientSessionManager *ClientSessionManager // 客户端session管理器
+	serverSessionManager *ServerSessionManager // 内部session管理器
+	keepAliveRetry       int
 }
 
 func NewNodeGate(ctx context.Context, wg *sync.WaitGroup) *NodeGate {
@@ -38,34 +42,35 @@ func (n *NodeGate) Init() {
 		Username:  share.Env.EtcdUsr,
 		Password:  share.Env.EtcdPwd,
 	})
-	checkErr("[GATE]:etcd client create error", err)
+	share.CheckFatalErr("[GATE]:etcd client create error", err)
 	n.etcdClient = cli
 
 	aliveKey := path.Join(share.Env.EtcdRoot, share.ETCD_GATE_PATH, share.ETCD_ALIVE_PATH, strconv.Itoa(share.Env.BootID))
 	exist, _, err := n.etcdClient.SyncGet(aliveKey)
-	checkErr("[GATE]:etcd get key error："+aliveKey, err)
+	share.CheckFatalErr("[GATE]:etcd get key error："+aliveKey, err)
 	if exist {
 		log.Fatal("[GATE]:alive key already exists", log.String("key", aliveKey))
 	}
-	checkErr("[GATE]:read etcd config error", n.readEtcdConfig())
+	share.CheckFatalErr("[GATE]:read etcd config error", n.readEtcdConfig())
 
 	var publicListenAddr = "0.0.0.0:" + strconv.Itoa(Config.PublicPort)
+	n.clientSessionManager = NewClientSessionManager()
 	n.publicServer = net.NewTCPServer(publicListenAddr, &net.ConnConfig{
 		ReadBufferSize:  CommonConfig.ReadBufferSize,
 		WriteBufferSize: CommonConfig.WriteBufferSize,
 		WriteQueueSize:  CommonConfig.WriteQueueSize,
-	}, NewClientSessionManager())
-	checkErr("[GATE]:public server listen error", n.publicServer.ListenAndServe())
-	log.Info("[GATE]:server listen for client at "+n.publicServer.Addr())
-
+	}, n.clientSessionManager)
+	share.CheckFatalErr("[GATE]:public server listen error", n.publicServer.ListenAndServe())
+	log.Info("[GATE]:server listen for client at " + n.publicServer.Addr())
+	n.serverSessionManager = NewServerSessionManager()
 	n.internalServer = net.NewTCPServer(":0", &net.ConnConfig{
 		ReadBufferSize:  CommonConfig.ReadBufferSize,
 		WriteBufferSize: CommonConfig.WriteBufferSize,
 		WriteQueueSize:  CommonConfig.WriteQueueSize,
-	}, NewServerSessionManager())
-	checkErr("[GATE]:internal server listen error", n.internalServer.ListenAndServe())
-	log.Info("[GATE]:server listen for internal at "+n.internalServer.Addr())
-	checkErr("[GATE]:etcd keep alive error", n.etcdKeepAlive())
+	}, n.serverSessionManager)
+	share.CheckFatalErr("[GATE]:internal server listen error", n.internalServer.ListenAndServe())
+	log.Info("[GATE]:server listen for internal at " + n.internalServer.Addr())
+	share.CheckFatalErr("[GATE]:etcd keep alive error", n.etcdKeepAlive())
 	n.etcdWatch()
 }
 
@@ -176,22 +181,25 @@ func (n *NodeGate) stop() {
 func (n *NodeGate) Run() {
 	timer := time.NewTicker(100 * time.Millisecond)
 	for {
-		n.etcdClient.Run()
-		n.publicServer.Run()
-		n.internalServer.Run()
 		select {
 		case _ = <-n.Ctx.Done():
 			n.stop()
 			n.Wg.Done()
 			return
-		case _ = <-timer.C:
-		default:
+		case event := <-n.etcdClient.ChanOut:
+			event.HandleEvent()
+		case event := <-n.clientSessionManager.EventChan:
+			n.clientSessionManager.HandleEvent(event)
+		case event := <-n.serverSessionManager.EventChan:
+			n.serverSessionManager.HandleEvent(event)
+		case now := <-timer.C:
+			n.Tick(now.UnixNano() / int64(time.Millisecond))
 		}
 	}
 }
 
-func checkErr(msg string, err error) {
-	if err != nil {
-		log.Fatal(msg, log.NamedError("err", err))
-	}
+func (n *NodeGate) Tick(now int64) {
+
 }
+
+

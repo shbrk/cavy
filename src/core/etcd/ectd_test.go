@@ -15,7 +15,10 @@ func TestMain(m *testing.M) {
 	}
 	cli = client
 	go func() {
-		cli.Run()
+		select {
+		case event := <-cli.ChanOut:
+			event.HandleEvent()
+		}
 	}()
 	m.Run()
 }

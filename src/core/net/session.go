@@ -1,6 +1,7 @@
 package net
 
 import (
+	"core/log"
 	"errors"
 	"time"
 )
@@ -23,7 +24,7 @@ type SessionEvent struct {
 type ISession interface {
 	PreReadHook(b *ByteBuffer) (*Packet, error) //io线程执行的解包函数
 	PreWriteHook(p *Packet)                     //io线程执行的封包函数
-	HandleEvent(event *SessionEvent)
+	PostEvent(event *SessionEvent)
 	Bind(c Connection)
 	Close(err error)
 	RemoteAddr() string
@@ -74,12 +75,12 @@ func (s *BaseSession) Send(p *Packet) error {
 	return nil
 }
 
-func (s *BaseSession) HandleEvent(event *SessionEvent) {
+func (s *BaseSession) PostEvent(event *SessionEvent) {
 	// 过滤掉心跳包
 	if event.Type == SESSION_PACKET && s.IsHeartBeatPacket(event.Pkt.GetOpCode()) {
 		return
 	}
-	s.manager.HandleEvent(event)
+	s.manager.PostEvent(event)
 }
 
 //等待发送队列结束后关闭
@@ -104,8 +105,8 @@ type ISessionEventHandler interface {
 }
 
 type ISessionManager interface {
-	Run()                                                  // 循环调用接口
 	HandleEvent(event *SessionEvent)                       // 处理事件接口
+	PostEvent(event *SessionEvent)                         // 投递事件接口
 	SetConnectFunc(cb func(addr string, session ISession)) // 设置重连回调,客户端连接才需要
 	CreateSession() ISession                               // 创建session
 	Close(err error)                                       // 关闭
@@ -114,27 +115,27 @@ type ISessionManager interface {
 func NewBaseSessionManager(handler ISessionEventHandler) *BaseSessionManager {
 	return &BaseSessionManager{
 		ISessionEventHandler: handler,
-		eventChan:            make(chan *SessionEvent, 1024*12),
+		EventChan:            make(chan *SessionEvent, 1024*12),
 	}
 }
 
 type BaseSessionManager struct {
 	ISessionEventHandler
-	eventChan chan *SessionEvent
+	EventChan chan *SessionEvent
 }
 
-func (m *BaseSessionManager) Run() {
-	select {
-	case event := <-m.eventChan:
-		switch event.Type {
-		case SESSION_NEW:
-			m.HandleNewSessionEvent(event.Session)
-		case SESSION_CLOSED:
-			m.HandleSessionClosedEvent(event.Session, event.Err)
-		case SESSION_PACKET:
-			m.HandleSessionPacketEvent(event.Session, event.Pkt)
-		}
-	default:
+func (m *BaseSessionManager) HandleEvent(event *SessionEvent) {
+	if event == nil {
+		log.Error("[SESSION]: event is nil")
+		return
+	}
+	switch event.Type {
+	case SESSION_NEW:
+		m.HandleNewSessionEvent(event.Session)
+	case SESSION_CLOSED:
+		m.HandleSessionClosedEvent(event.Session, event.Err)
+	case SESSION_PACKET:
+		m.HandleSessionPacketEvent(event.Session, event.Pkt)
 	}
 }
 
@@ -142,6 +143,6 @@ func (m *BaseSessionManager) Run() {
 func (m *BaseSessionManager) SetConnectFunc(cb func(addr string, session ISession)) {
 }
 
-func (m *BaseSessionManager) HandleEvent(event *SessionEvent) {
-	m.eventChan <- event
+func (m *BaseSessionManager) PostEvent(event *SessionEvent) {
+	m.EventChan <- event
 }

@@ -10,21 +10,22 @@ import (
 )
 
 type Client struct {
-	ID        int
-	session   *ClientSession
-	netClient *net.TCPClient
-	count     uint64
-	Wg        *sync.WaitGroup
+	ID             int
+	session        *ClientSession
+	netClient      *net.TCPClient
+	sessionManager *ClientSessionManager
+	count          uint64
+	Wg             *sync.WaitGroup
 }
 
 func (c *Client) Connect(addr string) {
-	sessionManager := NewClientSessionManager()
+	c.sessionManager = NewClientSessionManager()
 	c.netClient = net.NewTCPClient(5*time.Second, &net.ConnConfig{
 		ReadBufferSize:  128 * 1024,
 		WriteBufferSize: 128 * 1024,
 		WriteQueueSize:  8 * 1024,
-	}, sessionManager)
-	session := NewClientSession(uint64(c.ID),sessionManager)
+	}, c.sessionManager)
+	session := NewClientSession(uint64(c.ID), c.sessionManager)
 	err := c.netClient.SyncConnect(addr, time.Second*5, session)
 	if err != nil {
 		log.Fatal("connect error", log.NamedError("err", err))
@@ -60,11 +61,16 @@ func (c *Client) ping() {
 
 func (c *Client) Run() {
 	for {
-		c.netClient.Run()
+		select {
+		case event := <-c.sessionManager.EventChan:
+			c.sessionManager.HandleEvent(event)
+		default:
+		}
 		if c.count > 100 {
 			c.Wg.Done()
 			return
 		}
 		c.ping()
+
 	}
 }

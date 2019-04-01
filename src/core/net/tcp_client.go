@@ -42,9 +42,6 @@ func (t *TCPClient) init() {
 	}()
 }
 
-func (t *TCPClient) Run() {
-	t.sessionManager.Run()
-}
 func (t *TCPClient) Close() {
 	t.sessionManager.Close(nil)
 }

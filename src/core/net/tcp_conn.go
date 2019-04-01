@@ -66,7 +66,7 @@ func (c *TCPConnection) init() {
 	_ = c.conn.SetNoDelay(true)
 	c.session.Bind(c) //
 	c.setState(k_ESTABLISHED)
-	c.session.HandleEvent(&SessionEvent{Session: c.session, Type: SESSION_NEW})
+	c.session.PostEvent(&SessionEvent{Session: c.session, Type: SESSION_NEW})
 	go c.write()
 	go c.read()
 	log.Debug("[CONNECTION]: new connection", log.String("localAddr", c.LocalAddr()),
@@ -91,7 +91,7 @@ func (c *TCPConnection) Close(err error) {
 	}
 	c.setState(k_CLOSED)
 	close(c.writeQueue)
-	c.session.HandleEvent(&SessionEvent{Session: c.session, Type: SESSION_CLOSED, Err: err})
+	c.session.PostEvent(&SessionEvent{Session: c.session, Type: SESSION_CLOSED, Err: err})
 	c.session = nil
 }
 
@@ -122,7 +122,7 @@ func (c *TCPConnection) handlePacket(p *Packet) {
 	if c.getState() != k_ESTABLISHED { //可能已经被关闭
 		return
 	}
-	c.session.HandleEvent(&SessionEvent{Session: c.session, Type: SESSION_PACKET, Pkt: p})
+	c.session.PostEvent(&SessionEvent{Session: c.session, Type: SESSION_PACKET, Pkt: p})
 }
 
 func (c *TCPConnection) handleError(err error) {

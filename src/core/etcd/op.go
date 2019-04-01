@@ -31,7 +31,7 @@ func (a *AsyncGetOp) Exec(c *Client) {
 			event.Value = string(resp.Kvs[0].Value)
 		}
 	}
-	c.chanOut <- event
+	c.ChanOut <- event
 }
 
 type AsyncGetWithPrefixOp struct {
@@ -58,7 +58,7 @@ func (a *AsyncGetWithPrefixOp) Exec(c *Client) {
 		Values: values,
 		Func:   a.Func,
 	}
-	c.chanOut <- event
+	c.ChanOut <- event
 }
 
 type AsyncSetOp struct {
@@ -76,5 +76,5 @@ func (a *AsyncSetOp) Exec(c *Client) {
 		Err:  err,
 		Func: a.Func,
 	}
-	c.chanOut <- event
+	c.ChanOut <- event
 }

@@ -18,10 +18,10 @@ import (
 
 type NodeGame struct {
 	node.Base
-	etcdClient     *etcd.Client
-	internalClient *net.TCPClient
-	keepAliveRetry int
-	timerManager   *share.TimerManager
+	etcdClient         *etcd.Client
+	internalClient     *net.TCPClient
+	gateSessionManager *net.GateSessionManager
+	keepAliveRetry     int
 }
 
 func NewNodeGame(ctx context.Context, wg *sync.WaitGroup) *NodeGame {
@@ -33,44 +33,44 @@ func (n *NodeGame) Name() string {
 }
 
 func (n *NodeGame) Init() {
-	n.timerManager = share.NewTimerManager()
 	cli, err := etcd.NewClient(&etcd.Config{
 		Endpoints: share.Env.EtcdAddr,
 		Timeout:   10,
 		Username:  share.Env.EtcdUsr,
 		Password:  share.Env.EtcdPwd,
 	})
-	checkErr(err, "[GAME]:etcd client create error")
+	share.CheckFatalErr("[GAME]:etcd client create error", err)
 	n.etcdClient = cli
 	aliveKey := path.Join(share.Env.EtcdRoot, strconv.Itoa(share.Env.AreaID), share.ETCD_GAME_PATH, share.ETCD_ALIVE_PATH,
 		strconv.Itoa(share.Env.BootID))
 	exist, _, err := n.etcdClient.SyncGet(aliveKey)
-	checkErr(err, "[GAME]:etcd get key error："+aliveKey)
+	share.CheckFatalErr("[GAME]:etcd get key error："+aliveKey, err)
 	if exist {
 		log.Fatal("[GAME]:alive key already exists", log.String("key", aliveKey))
 	}
-	checkErr(n.readEtcdConfig(), "[GAME]:read etcd config")
+	share.CheckFatalErr("[GAME]:read etcd config", n.readEtcdConfig())
+	n.gateSessionManager = net.NewGateSessionManager()
 	n.internalClient = net.NewTCPClient(5*time.Second, &net.ConnConfig{
 		ReadBufferSize:  CommonConfig.ReadBufferSize,
 		WriteBufferSize: CommonConfig.WriteBufferSize,
 		WriteQueueSize:  CommonConfig.WriteQueueSize,
-	}, net.NewGateSessionManager())
+	}, n.gateSessionManager)
 
 	gateAliveKey := path.Join(share.Env.EtcdRoot, share.ETCD_GATE_PATH, share.ETCD_ALIVE_PATH)
 	_, values, err := n.etcdClient.SyncGetWithPrefix(gateAliveKey + "/")
-	checkErr(n.readEtcdConfig(), "[GAME]:etcd get key error:"+gateAliveKey)
+	share.CheckFatalErr("[GAME]:etcd get key error:"+gateAliveKey, n.readEtcdConfig())
 	if len(values) == 0 {
 		log.Fatal("there has no gate for game to connect")
 	}
 	for index := range values {
 		gateConfig := &node.GateAliveConfig{}
-		checkErr(json.Unmarshal([]byte(values[index]), gateConfig), "[GAME]:parse json error")
+		share.CheckFatalErr("[GAME]:parse json error", json.Unmarshal([]byte(values[index]), gateConfig))
 		addr := fmt.Sprintf("%s:%d", gateConfig.InternalIP, gateConfig.InternalPort)
-		newSession := net.NewGateSession(uint64(gateConfig.BootID),n.internalClient.GetSessionManager().(*net.GateSessionManager))
+		newSession := net.NewGateSession(uint64(gateConfig.BootID), n.internalClient.GetSessionManager().(*net.GateSessionManager))
 		err = n.internalClient.SyncConnect(addr, 5*time.Second, newSession)
-		checkErr(err, "[GAME]:connect gate error")
+		share.CheckFatalErr("[GAME]:connect gate error", err)
 	}
-	checkErr(n.etcdKeepAlive(), "[GAME]:keep alive error")
+	share.CheckFatalErr("[GAME]:keep alive error", n.etcdKeepAlive())
 	n.etcdWatch()
 }
 
@@ -174,22 +174,21 @@ func (n *NodeGame) stop() {
 func (n *NodeGame) Run() {
 	timer := time.NewTicker(100 * time.Millisecond)
 	for {
-		n.etcdClient.Run()
-		n.internalClient.Run()
 		select {
 		case _ = <-n.Ctx.Done():
 			n.stop()
 			n.Wg.Done()
 			return
+		case event := <-n.etcdClient.ChanOut:
+			event.HandleEvent()
+		case event := <-n.gateSessionManager.EventChan:
+			n.gateSessionManager.HandleEvent(event)
 		case now := <-timer.C:
-			n.timerManager.Run(now.UnixNano(), 0)
-		default:
+			n.Tick(now.UnixNano() / int64(time.Millisecond))
 		}
 	}
 }
 
-func checkErr(err error, msg string) {
-	if err != nil {
-		log.Fatal(msg, log.NamedError("err", err))
-	}
+func (n *NodeGame) Tick(now int64) {
+
 }

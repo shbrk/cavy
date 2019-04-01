@@ -1,6 +1,7 @@
 package share
 
 import (
+	"core/log"
 	"errors"
 	"net"
 )
@@ -25,4 +26,10 @@ func GetIPByInterface(name string) (string, error) {
 		}
 	}
 	return "", errors.New("net interface not found:" + name)
+}
+
+func CheckFatalErr(msg string, err error) {
+	if err != nil {
+		log.Fatal(msg, log.NamedError("err", err))
+	}
 }
