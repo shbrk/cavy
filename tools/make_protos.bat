@@ -3,3 +3,7 @@
 
 ..\bin\protoc -I=../ --go_out=../src ../proto/internal/msg.proto
 ..\bin\protoc -I=../ --go_out=../src ../proto/internal/opcode.proto
+
+..\bin\protoc -I=../ --go_out=../src ../proto/entity/common.proto
+
+pause

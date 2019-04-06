@@ -1,30 +1,40 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
-	"math"
+	_ "github.com/go-sql-driver/mysql"
 )
 
-func main() {
-	fmt.Println(isPalindrome(121))
+func CheckErr(err error){
+	if err != nil{
+		panic(err)
+	}
 }
 
-func isPalindrome(x int) bool {
-	if x >= 0 {
-		var i int
-		var t int64
-		var y = x
-		for {
-			r := x % 10
-			x = x / 10
-			t += int64(r) * int64(math.Pow10(9-i))
-			if x == 0 {
-				t = t / int64(math.Pow10(9-i))
-				return int(t) == y
-			}
-			i++
-		}
-	}
-	return false
 
+func main() {
+	db,err := sql.Open("mysql","root:123456@tcp(127.0.0.1:3306)/test?charset=utf8")
+	CheckErr(err)
+	stmt,err := db.Prepare("SELECT `id`,`name` FROM `foo`")
+	conn,err := db.Conn(context.Background())
+	conn,err = db.Conn(context.Background())
+
+	fmt.Println(conn)
+	rows,err := stmt.Query()
+	rows,err = stmt.Query()
+	stmt.Exec()
+	CheckErr(err)
+	for rows.Next() {
+		var id int
+		var name string
+		err := rows.Scan(&id,&name)
+		fmt.Println(id,name)
+		CheckErr(err)
+	}
+	err = stmt.Close()
+	CheckErr(err)
+	err = db.Close()
+	CheckErr(err)
 }

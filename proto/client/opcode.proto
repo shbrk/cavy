@@ -10,13 +10,13 @@ enum OPCODE {
   //内置消息开始号
   EMPTY = 0;
   BEGIN = 20000;
-  // Client发送到Server的Ping包
-  C2S_PING = 20001;
-  // Server发送回客户端的Ping
-  S2C_PING = 20002;
-  TEST1 = 20003;
-  TEST2 = 20004;
-  TEST3 = 20005;
+  C2S_PING = 20001;// Client发送到Server的Ping包
+  S2C_PING = 20002; // Server发送回客户端的Ping
+  S2C_EntityList = 20010;// 实体列表
+  S2C_EntityAdd = 20011; // 增加实体
+  S2C_EntityUpdate= 20012; //
+  S2C_EntityDelete = 20013;
   //内置消息结束号
   END = 49999;
 }
+

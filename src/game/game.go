@@ -115,9 +115,12 @@ func (n *NodeGame) etcdKeepAlive() error {
 		if n.keepAliveRetry < 10 {
 			log.Error("[ETCD] keep alive failed,retrying", log.String("key", key),
 				log.Int("retry_count", n.keepAliveRetry))
+			n.keepAliveRetry++
+			_ = n.etcdKeepAlive()
+		} else {
+			log.Error("[ETCD] keep alive failed, stop retry", log.String("key", key),
+				log.Int("retry_count", n.keepAliveRetry))
 		}
-		n.keepAliveRetry++
-		_ = n.etcdKeepAlive()
 	})
 	return nil
 }

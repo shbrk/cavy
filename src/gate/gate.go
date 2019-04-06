@@ -15,8 +15,6 @@ import (
 	"time"
 )
 
-
-
 type NodeGate struct {
 	node.Base
 	etcdClient           *etcd.Client
@@ -93,9 +91,12 @@ func (n *NodeGate) etcdKeepAlive() error {
 		if n.keepAliveRetry < 10 {
 			log.Error("[ETCD] keep alive failed,retrying", log.String("key", key),
 				log.Int("retry_count", n.keepAliveRetry))
+			n.keepAliveRetry++
+			_ = n.etcdKeepAlive()
+		} else {
+			log.Error("[ETCD] keep alive failed, stop retry", log.String("key", key),
+				log.Int("retry_count", n.keepAliveRetry))
 		}
-		n.keepAliveRetry++
-		_ = n.etcdKeepAlive()
 	})
 
 	return nil
@@ -149,27 +150,19 @@ func (n *NodeGate) readEtcdConfig() error {
 }
 
 func (n *NodeGate) GetServerSessionManager() *ServerSessionManager {
-	return n.internalServer.GetSessionManager().(*ServerSessionManager)
+	return n.serverSessionManager
 }
 
 func (n *NodeGate) GetClientSessionManager() *ClientSessionManager {
-	return n.publicServer.GetSessionManager().(*ClientSessionManager)
+	return n.clientSessionManager
 }
 
 func (n *NodeGate) GetServerSession(sessionID uint64) *ServerSession {
-	sessionManager := n.GetServerSessionManager()
-	if sessionManager == nil {
-		return nil
-	}
-	return sessionManager.GetSession(sessionID)
+	return n.serverSessionManager.GetSession(sessionID)
 }
 
 func (n *NodeGate) GetClientSession(sessionID uint64) *ClientSession {
-	sessionManager := n.GetClientSessionManager()
-	if sessionManager == nil {
-		return nil
-	}
-	return sessionManager.GetSession(sessionID)
+	return n.clientSessionManager.GetSession(sessionID)
 }
 
 func (n *NodeGate) stop() {
@@ -201,5 +194,3 @@ func (n *NodeGate) Run() {
 func (n *NodeGate) Tick(now int64) {
 
 }
-
-

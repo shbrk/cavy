@@ -1,8 +1,9 @@
 syntax="proto3";
 package entity;
 
-
-message test {
-    int32 a = 1;
+enum TYPE {
+    None = 0;
+    RoleBaseData = 1;
+    ItemData = 2;
 }
 

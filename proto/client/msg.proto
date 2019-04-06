@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package client;
 
+import "proto/entity/common.proto";
+
 // ping包
 // C2S_PING = 5;S2C_PING = 6;
 message Ping {
@@ -14,32 +16,31 @@ message Ping {
   fixed64 gate_back_send = 7;
 }
 
-
-message Test1 {
-  int32  a =1;
-  string b = 2;
-  repeated fixed64 c = 3;
-  int32  ID = 4;
-  int32  COUNT = 5;
+message EntityContainer {
+  entity.TYPE entityType = 1;
+  repeated bytes list = 2;
 }
 
-message Test2 {
-  int64 a =1;
-  repeated sint32 xxxaa = 2;
-  int64 ccccxxxxxxxxx= 3;
-  int32  ID = 4;
-  int32  COUNT = 5;
+// 发送某些实体的所有列表
+message EntityList {
+  uint64 owner = 1;
+  repeated EntityContainer list = 2;
 }
 
-message  Test3 {
-  string axxxxx = 1;
-  sint32 vxxxx = 2;
-  int32 a = 3;
-  int32 b = 4;
-  int32 c = 5;
-  int32 d = 6;
-  int32 e = 7;
-  string f = 8;
-  int32  ID = 9;
-  int32  COUNT = 10;
+// 实体增加
+message EntityAdd {
+  uint64 owner = 1;
+  EntityContainer container = 2;
+}
+
+// 实体更新
+message EntityUpdate {
+  uint64 owner = 1;
+  EntityContainer container = 2;
+}
+// 实体删除
+message EntityDelete {
+  uint64 owner = 1;
+  entity.TYPE entityType = 2;
+  repeated uint64 list = 3;
 }
