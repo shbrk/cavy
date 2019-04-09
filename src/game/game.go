@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"proto/inner"
 	"strconv"
 	"sync"
 	"time"
@@ -50,6 +51,7 @@ func (n *NodeGame) Init() {
 	}
 	share.CheckFatalErr("[GAME]:read etcd config", n.readEtcdConfig())
 	n.gateSessionManager = net.NewGateSessionManager()
+	n.gateSessionManager.SetRegisterInfo(inner.OPCODE_S2G_GS_REG,&inner.GSReg{AreaId:int32(share.Env.AreaID)})
 	n.internalClient = net.NewTCPClient(5*time.Second, &net.ConnConfig{
 		ReadBufferSize:  CommonConfig.ReadBufferSize,
 		WriteBufferSize: CommonConfig.WriteBufferSize,
@@ -66,7 +68,7 @@ func (n *NodeGame) Init() {
 		gateConfig := &node.GateAliveConfig{}
 		share.CheckFatalErr("[GAME]:parse json error", json.Unmarshal([]byte(values[index]), gateConfig))
 		addr := fmt.Sprintf("%s:%d", gateConfig.InternalIP, gateConfig.InternalPort)
-		newSession := net.NewGateSession(uint64(gateConfig.BootID), n.internalClient.GetSessionManager().(*net.GateSessionManager))
+		newSession := n.gateSessionManager.CreateSessionWithBootID(gateConfig.BootID)
 		err = n.internalClient.SyncConnect(addr, 5*time.Second, newSession)
 		share.CheckFatalErr("[GAME]:connect gate error", err)
 	}

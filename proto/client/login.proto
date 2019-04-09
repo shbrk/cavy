@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package client;
+
+
+message C2S_Login {
+    string token = 1; // 登录token
+    int32  areaID = 2; //用户名
+}
+
+message S2C_Login {
+    uint64 accountId = 1;
+}

@@ -3,7 +3,9 @@ package gate
 import (
 	"core/log"
 	"core/net"
+	"errors"
 	"github.com/golang/protobuf/proto"
+	"proto/inner"
 	"sync/atomic"
 )
 
@@ -66,8 +68,9 @@ func NewServerSessionManager() *ServerSessionManager {
 
 type ServerSessionManager struct {
 	*net.BaseSessionManager
-	sessions        map[uint64]*ServerSession
-	autoIncrementID uint64
+	sessions         map[uint64]*ServerSession
+	sessionsByAreaID map[int]*ServerSession
+	autoIncrementID  uint64
 }
 
 func (m *ServerSessionManager) CreateSession() net.ISession {
@@ -97,11 +100,29 @@ func (m *ServerSessionManager) HandleSessionClosedEvent(session net.ISession, er
 func (m *ServerSessionManager) HandleSessionPacketEvent(session net.ISession, pkt *net.Packet) {
 	serverSession, _ := session.(*ServerSession)
 	log.Info(serverSession.RemoteAddr())
+	opCode := inner.OPCODE(pkt.GetOpCode())
+	if opCode == inner.OPCODE_S2G_GS_REG {
+		msg := &inner.GSReg{}
+		err := proto.Unmarshal(pkt.Buff.Data(),msg)
+		if err != nil{
+			serverSession.Close(errors.New("unmarshal msg error"))
+			m.RemoveSession(serverSession)
+			log.Error("[SERVER_SESSION]:unmarshal msg error",log.NamedError("err",err))
+		}
+		// TODO 不同的节点需要重构 区服注册和路由逻辑
+		if oldSession := m.sessionsByAreaID[int(msg.AreaId)];oldSession != nil{
+			log.Error("")
+		}
+	}
 	//TODO 转发
 }
 
 func (m *ServerSessionManager) GetSession(id uint64) *ServerSession {
 	return m.sessions[id]
+}
+
+func (m *ServerSessionManager) GetSessionByAreaID(areaID int) {
+	// TODO 根据game注册的区服ID 选择一个区服来服务
 }
 
 func (m *ServerSessionManager) Close(err error) {

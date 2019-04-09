@@ -41,8 +41,8 @@ func (t *TCPServer) ListenAndServe() error {
 	return nil
 }
 
-func (t *TCPServer)Addr() string {
-	return fmt.Sprintf("%s:%d",t.IP.String(),t.Port)
+func (t *TCPServer) Addr() string {
+	return fmt.Sprintf("%s:%d", t.IP.String(), t.Port)
 }
 
 func (t *TCPServer) Close() {

@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package client;
+
+import "proto/entity/common.proto";
+
+// ping包
+// C2S_PING = 5;S2C_PING = 6;
+message Ping {
+  fixed64 client_send = 1;
+  fixed64 gate_recv = 2;
+  fixed64 gate_send = 3;
+  fixed64 gs_recv = 4;
+  fixed64 gs_send = 5;
+  fixed64 gate_back_rev = 6;
+  fixed64 gate_back_send = 7;
+}
+
+message EntityContainer {
+  entity.TYPE entityType = 1;
+  repeated bytes list = 2;
+}
+
+// 发送某些实体的所有列表
+message EntityList {
+  uint64 owner = 1;
+  repeated EntityContainer list = 2;
+}
+
+// 实体增加
+message EntityAdd {
+  uint64 owner = 1;
+  EntityContainer container = 2;
+}
+
+// 实体更新
+message EntityUpdate {
+  uint64 owner = 1;
+  EntityContainer container = 2;
+}
+// 实体删除
+message EntityDelete {
+  uint64 owner = 1;
+  entity.TYPE entityType = 2;
+  repeated uint64 list = 3;
+}
+
+// 通用错误消息
+message CommonError {
+   int32 opCode = 1;  //触发错误的消息ID
+   int32 errCode = 2; //错误ID
+   string errText = 3; // 错误描述
+}

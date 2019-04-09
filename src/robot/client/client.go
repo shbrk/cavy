@@ -3,6 +3,7 @@ package client
 import (
 	"core/log"
 	"core/net"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"proto/client"
 	"sync"
@@ -20,6 +21,7 @@ type Client struct {
 
 func (c *Client) Connect(addr string) {
 	c.sessionManager = NewClientSessionManager()
+	c.sessionManager.SetPacketProcessor(c) // 设置包处理对象
 	c.netClient = net.NewTCPClient(5*time.Second, &net.ConnConfig{
 		ReadBufferSize:  128 * 1024,
 		WriteBufferSize: 128 * 1024,
@@ -31,6 +33,7 @@ func (c *Client) Connect(addr string) {
 		log.Fatal("connect error", log.NamedError("err", err))
 	}
 	c.session = session
+
 }
 
 func (c *Client) SendMsg(opCode uint16, msg proto.Message) {
@@ -41,36 +44,31 @@ func (c *Client) SendMsg(opCode uint16, msg proto.Message) {
 	}
 }
 
-func (c *Client) ping() {
-	c.count += 1
-	if c.count%3 == 1 {
-		c.SendMsg(uint16(client.OPCODE_TEST1), &client.Test1{
-			A: 1, B: "xxxaaa222", C: []uint64{1, 2, 3}, ID: int32(c.ID), COUNT: int32(c.count),
-		})
-	} else if c.count%3 == 2 {
-		c.SendMsg(uint16(client.OPCODE_TEST2), &client.Test2{
-			A: 222, Xxxaa: []int32{1, 2, 3}, Ccccxxxxxxxxx: 9, ID: int32(c.ID), COUNT: int32(c.count),
-		})
-	} else {
-		c.SendMsg(uint16(client.OPCODE_TEST3), &client.Test3{
-			Axxxxx: "axxx", Vxxxx: 2, A: 3, B: 1, C: 4, D: 2, F: "axx", ID: int32(c.ID), COUNT: int32(c.count),
-		})
+func (c *Client) ProcessPacket(session net.ISession, pkt *net.Packet) {
+	if pkt.MsgBody == nil {
+		log.Warn("[CLIENT]:msg body not auto unmarshal", log.Uint16("opCode", pkt.GetOpCode()))
+		return
 	}
-	log.Info("", log.Int("id", c.ID), log.Uint64("count", c.count))
+	var opCode = client.OPCODE(pkt.GetOpCode())
+	switch opCode {
+	case client.OPCODE_S2C_LOGIN:
+		c.onLoginBack(pkt.MsgBody.(*client.S2C_Login))
+	}
+}
+
+func (c *Client) login() {
+	var token = fmt.Sprintf("robot%d", c.ID)
+	var msg = &client.C2S_Login{Token: token, AreaID: 1}
+	c.SendMsg(uint16(client.OPCODE_C2S_LOGIN), msg)
+}
+
+func (c *Client) onLoginBack(msg *client.S2C_Login) {
+	log.Info("login success")
 }
 
 func (c *Client) Run() {
 	for {
-		select {
-		case event := <-c.sessionManager.EventChan:
-			c.sessionManager.HandleEvent(event)
-		default:
-		}
-		if c.count > 100 {
-			c.Wg.Done()
-			return
-		}
-		c.ping()
-
+		event := <-c.sessionManager.EventChan
+		c.sessionManager.HandleEvent(event)
 	}
 }

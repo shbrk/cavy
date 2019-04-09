@@ -36,7 +36,7 @@ func main() {
 	//加载所有节点
 	for i := range nodes {
 		nodes[i].Init()
-		log.Info("[BOOT]:"+ nodes[i].Name() +" start")
+		log.Info("[BOOT]:" + nodes[i].Name() + " start")
 	}
 	// 每个节点运行在独立的线程上
 	for i := range nodes {

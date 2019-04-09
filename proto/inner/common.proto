@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package inner;
+
+// GS向Gate注册
+// S2G_GS_REG = 7;
+message GSReg {
+  int32 area_id = 1; // 区服ID
+}
+
+// Gate返回给GS的注册结果
+// G2S_GS_REG = 8;
+message GSRegResult {
+  bool ret = 1;
+}

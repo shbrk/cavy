@@ -3,14 +3,23 @@ package gate
 import (
 	"core/log"
 	"core/net"
+	"errors"
 	"github.com/golang/protobuf/proto"
+	"proto/client"
 	"sync/atomic"
 )
 
-// gate 管理客户端的连接
+type LoginState int
 
+const (
+	NotLogin     LoginState = 0 //未登录
+	LoginPending LoginState = 1 //登陆中
+	LoginSuccess LoginState = 2 //登录成功
+)
+
+// gate 管理客户端的连接
 func NewClientSession(id uint64, manager *ClientSessionManager) *ClientSession {
-	session := &ClientSession{sessionID: id}
+	session := &ClientSession{sessionID: id, loginState: NotLogin}
 	baseSession := net.NewBaseSession(manager, session)
 	session.BaseSession = baseSession
 	return session
@@ -18,8 +27,9 @@ func NewClientSession(id uint64, manager *ClientSessionManager) *ClientSession {
 
 type ClientSession struct {
 	*net.BaseSession
-	sessionID uint64
-	userID    uint64
+	sessionID  uint64
+	userID     uint64
+	loginState LoginState
 }
 
 func (c *ClientSession) PreReadHook(b *net.ByteBuffer) (*net.Packet, error) {
@@ -51,6 +61,15 @@ func (c *ClientSession) SendData(opCode uint16, guid uint64, data []byte) {
 	if err != nil {
 		log.Error("[CLIENT_SESSION]：send message error", log.NamedError("err", err))
 	}
+}
+
+func (c *ClientSession) login(opCode client.OPCODE, msg *client.C2S_Login) {
+	if c.loginState == NotLogin {
+
+	} else {
+
+	}
+
 }
 
 func NewClientSessionManager() *ClientSessionManager {
@@ -94,7 +113,21 @@ func (m *ClientSessionManager) HandleSessionClosedEvent(session net.ISession, er
 	m.RemoveSession(clientSession)
 }
 func (m *ClientSessionManager) HandleSessionPacketEvent(session net.ISession, pkt *net.Packet) {
-	_, _ = session.(*ClientSession)
+	clientSession, _ := session.(*ClientSession)
+	opCode := client.OPCODE(pkt.GetOpCode())
+	switch opCode {
+	case client.OPCODE_C2S_LOGIN:
+		msg := &client.C2S_Login{}
+		err := proto.Unmarshal(pkt.Buff.Data(), msg)
+		if err != nil {
+			log.Error("[CLIENT_SESSION]:unmarshal proto error", log.NamedError("err", err))
+			clientSession.Close(errors.New("unmarshal proto error"))
+			return
+		}
+		clientSession.login(opCode, msg)
+
+	}
+
 	//TODO 转发给后端服务器 测试代码
 	//serverSession := gNodeGate.GetServerSession(1)
 	//if serverSession == nil{

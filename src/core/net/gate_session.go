@@ -4,6 +4,8 @@ import (
 	"core/log"
 	"errors"
 	"github.com/golang/protobuf/proto"
+	"proto/inner"
+	"sync/atomic"
 	"time"
 )
 
@@ -12,8 +14,8 @@ import (
 
 const MAX_RECONNECT_COUNT = 20
 
-func NewGateSession(id uint64, manager *GateSessionManager) *GateSession {
-	session := &GateSession{sessionID: id}
+func NewGateSession(bootID int, sessionID uint64, manager *GateSessionManager) *GateSession {
+	session := &GateSession{sessionID: sessionID, bootID: bootID}
 	baseSession := NewBaseSession(manager, session)
 	session.BaseSession = baseSession
 	return session
@@ -22,6 +24,7 @@ func NewGateSession(id uint64, manager *GateSessionManager) *GateSession {
 type GateSession struct {
 	*BaseSession
 	sessionID      uint64
+	bootID         int
 	reconnectTimer *time.Timer
 	isReconnecting bool // 是否正在重连中
 }
@@ -85,7 +88,22 @@ func (g *GateSession) SendData(opCode uint16, guid uint64, data []byte) {
 	buf.Write(data)
 	err := g.Send(&Packet{IMsgHeader: &InternalHeader{OpCode: opCode}, Buff: buf})
 	if err != nil {
-		log.Error("[CLIENT_SESSION]：send message error", log.NamedError("err", err))
+		log.Error("[GATE_SESSION]：send message error", log.NamedError("err", err))
+	}
+}
+
+func (g *GateSession) RegToGate(opCode inner.OPCODE, msg proto.Message) {
+	g.SendMsg(uint16(opCode), msg)
+}
+func (g *GateSession) OnRegBack(ret bool) {
+	if ret {
+		log.Info("[GATE_SESSION] reg to gate ok", log.Int("bootID", g.bootID),
+			log.String("localAddr", g.LocalAddr()),
+			log.String("remoteAddr", g.RemoteAddr()))
+	} else {
+		log.Error("[GATE_SESSION] reg to gate failed", log.Int("bootID", g.bootID),
+			log.String("localAddr", g.LocalAddr()),
+			log.String("remoteAddr", g.RemoteAddr()))
 	}
 }
 
@@ -108,21 +126,37 @@ type ISessionConsumer interface {
 }
 
 type GateSessionManager struct {
-	*BaseSessionManager
-	sessions          map[uint64]*GateSession
-	connectFunc       func(addr string, session ISession)
-	reconnectInterval time.Duration
+	*BaseSessionManager                                     //基类
+	sessions            map[uint64]*GateSession             //以sessionID为key的map
+	sessionsWithBootID  map[int]*GateSession                //以bootID为key的map
+	connectFunc         func(addr string, session ISession) //连接回调
+	reconnectInterval   time.Duration                       // 重连最小周期
+	autoIncrementID     uint64                              //自增ID
+	regOpCode           inner.OPCODE                     //向gate注册的消息ID
+	regMsg              proto.Message                       // 向gate注册的消息
 }
 
 func (m *GateSessionManager) CreateSession() ISession {
 	return nil
 }
 
+func (m *GateSessionManager) CreateSessionWithBootID(bootID int) ISession {
+	atomic.AddUint64(&m.autoIncrementID, 1)
+	return NewGateSession(bootID, m.autoIncrementID, m)
+}
+
 func (m *GateSessionManager) AddSession(session *GateSession) {
 	m.sessions[session.sessionID] = session
+	m.sessionsWithBootID[session.bootID] = session
 }
 func (m *GateSessionManager) RemoveSession(session *GateSession) {
 	delete(m.sessions, session.sessionID)
+	delete(m.sessionsWithBootID, session.bootID)
+}
+
+func (m *GateSessionManager) SetRegisterInfo(opCode inner.OPCODE, msg proto.Message) {
+	m.regOpCode = opCode
+	m.regMsg = msg
 }
 
 func (m *GateSessionManager) SetConnectFunc(cb func(addr string, session ISession)) {
@@ -130,48 +164,39 @@ func (m *GateSessionManager) SetConnectFunc(cb func(addr string, session ISessio
 }
 
 func (m *GateSessionManager) HandleEtcdEventPut(bootID int, addr string) {
-	//if session := m.GetSession(uint64(bootID)); session != nil {
-	//	log.Error("[GATE_SESSION]:etcd new put has duplicate id", log.Int("bootID", bootID))
-	//	return
-	//}
-	m.connectFunc(addr, NewGateSession(uint64(bootID), m))
+	m.connectFunc(addr, m.CreateSessionWithBootID(bootID))
 }
 
 func (m *GateSessionManager) HandleEtcdEventDelete(booID int) {
-	log.Warn("[GATE_SESSION]: etcd node is down", log.Int("bootID", booID))
-	//if session := m.GetSession(uint64(booID)); session != nil {
-	//	session.Close(errors.New("etcd node is down"))
-	//	m.RemoveSession(session)
-	//}
+	session := m.GetSessionByBootID(booID)
+	if session != nil {
+		session.Close(errors.New("etcd node is down"))
+		m.RemoveSession(session)
+	}
+	log.Error("[GATE_SESSION]: etcd node is down", log.Int("bootID", booID))
 }
 
 func (m *GateSessionManager) HandleNewSessionEvent(session ISession) {
 	gateSession, _ := session.(*GateSession)
 	if oldSession := m.GetSession(gateSession.sessionID); oldSession != nil {
-		if oldSession == gateSession { // 已经存在的session
-			if oldSession.isReconnecting {
-				log.Info("[GATE_SESSION]：reconnect succeed", log.String("localAddr", session.LocalAddr()),
-					log.String("remoteAddr", session.RemoteAddr()))
-				oldSession.StopReconnect()
-			} else { // 可能是延迟比较大 多次重连结果都连接成功
-				log.Warn("reconnect maybe to make connection twice", log.String("localAddr", session.LocalAddr()),
-					log.String("remoteAddr", session.RemoteAddr()))
-			}
-		} else {
-			if oldSession.isReconnecting { // 可能是对方重启了ID没变 addr变了
-				oldSession.Close(errors.New("[GATE_SESSION]:new session has duplicate id,may same remote changed addr"))
-			} else {
-				gateSession.Close(errors.New("[GATE_SESSION]: new session has duplicate id"))
-				log.Error("[GATE_SESSION]: new session has duplicate id", log.Uint64("sessionID", gateSession.sessionID))
-				return
-			}
+		if oldSession.isReconnecting {
+			oldSession.StopReconnect()
 		}
+		log.Info("[GATE_SESSION]：reconnection successful", log.String("localAddr", session.LocalAddr()),
+			log.String("remoteAddr", session.RemoteAddr()))
+
 	} else {
+		if oldSession := m.GetSessionByBootID(gateSession.bootID); oldSession != nil {
+			oldSession.Close(errors.New("[GATE_SESSION]: new session has duplicate id"))
+			m.RemoveSession(oldSession)
+		}
 		log.Info("[GATE_SESSION]: new session ", log.String("localAddr", session.LocalAddr()),
 			log.String("remoteAddr", session.RemoteAddr()))
+		m.AddSession(gateSession)
+		gateSession.RegToGate(m.regOpCode, m.regMsg)
 	}
-	m.AddSession(gateSession)
 }
+
 func (m *GateSessionManager) HandleSessionClosedEvent(session ISession, err error) {
 	gateSession, _ := session.(*GateSession)
 	log.Info("[GATE_SESSION]: session closed", log.String("localAddr", session.LocalAddr()),
@@ -181,6 +206,7 @@ func (m *GateSessionManager) HandleSessionClosedEvent(session ISession, err erro
 			m.connectFunc(addr, gateSession)
 			log.Info("[GATE_SESSION]:try reconnect :" + addr)
 		}, func(count int) {
+			m.RemoveSession(gateSession)
 			log.Error("[GATE_SESSION]: auto reconnect failed", log.Int("tryCount", count))
 		})
 	}
@@ -188,15 +214,17 @@ func (m *GateSessionManager) HandleSessionClosedEvent(session ISession, err erro
 
 func (m *GateSessionManager) HandleSessionPacketEvent(session ISession, pkt *Packet) {
 	_, _ = session.(*GateSession)
-	//msg := pkt.MsgBody.(proto2.ITest)
-	//head := pkt.IMsgHeader.(*InternalHeader)
-	// log.Debug("", log.Uint16("code", head.GetOpCode()), log.Uint64("guid", head.Guid), log.Int32("id", msg.GetID()), log.Int32("count", msg.GetCOUNT()))
-	//TODO 派发给逻辑层
-	//	log.Debug("msg",log.Uint64("GateBackRev",msg.GateBackRev),log.Uint64("GsRecv",msg.GsRecv))
+	if m.Processor != nil {
+		m.Processor.ProcessPacket(session, pkt)
+	}
 }
 
 func (m *GateSessionManager) GetSession(id uint64) *GateSession {
 	return m.sessions[id]
+}
+
+func (m *GateSessionManager) GetSessionByBootID(bootID int) *GateSession {
+	return m.sessionsWithBootID[bootID]
 }
 
 func (m *GateSessionManager) Close(err error) {

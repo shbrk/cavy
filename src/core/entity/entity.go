@@ -26,7 +26,7 @@ type Notifier interface {
 
 // 实体接口
 type Entity interface {
-	GetUUID() uint64
+	GetUUID() uint64 // 每个实体有唯一UUID
 }
 
 func NewManager(owner uint64, notifier Notifier) *Manager {

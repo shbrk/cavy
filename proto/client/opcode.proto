@@ -7,16 +7,33 @@ package client;
 // 20000-49999客户端
 // 50000-65535留给gm和其他节点使用
 enum OPCODE {
-  //内置消息开始号
-  EMPTY = 0;
-  BEGIN = 20000;
+  OP_EMPTY = 0;
+  OP_BEGIN = 20000;
   C2S_PING = 20001;// Client发送到Server的Ping包
   S2C_PING = 20002; // Server发送回客户端的Ping
+
+  C2S_LOGIN = 20003; //客户端登陆
+  S2C_LOGIN = 20004; //服务器发送给客户端的登陆结果
+
   S2C_EntityList = 20010;// 实体列表
   S2C_EntityAdd = 20011; // 增加实体
-  S2C_EntityUpdate= 20012; //
+  S2C_EntityUpdate= 20012; // 实体更新
   S2C_EntityDelete = 20013;
   //内置消息结束号
-  END = 49999;
+  OP_END = 49999;
 }
 
+// 1-99 底层占用
+// 100-19999是内部服务器错误号
+// 20000-49999客户端
+// 50000-65535留给gm和其他节点使用
+enum ERRCODE {
+  ERR_EMPTY = 0;
+  ERR_BEGIN = 20000;
+  SYSTEM_ERROR = 20001; // 系统错误
+  SERVER_MAINTAIN = 20002;// 对应的服务器节点不存在
+  DATA_NO_EXIST = 20003; // 数据不存在
+  REQ_ILLEGAL = 20004; // 请求非法
+  TIME_OUT = 20005; // 内部处理流程超时
+  ERR_END = 49999;
+}

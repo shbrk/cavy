@@ -104,6 +104,10 @@ type ISessionEventHandler interface {
 	HandleSessionPacketEvent(session ISession, pkt *Packet)
 }
 
+type IPacketProcessor interface {
+	ProcessPacket(ISession, *Packet)
+}
+
 type ISessionManager interface {
 	HandleEvent(event *SessionEvent)                       // 处理事件接口
 	PostEvent(event *SessionEvent)                         // 投递事件接口
@@ -122,6 +126,7 @@ func NewBaseSessionManager(handler ISessionEventHandler) *BaseSessionManager {
 type BaseSessionManager struct {
 	ISessionEventHandler
 	EventChan chan *SessionEvent
+	Processor IPacketProcessor
 }
 
 func (m *BaseSessionManager) HandleEvent(event *SessionEvent) {
@@ -145,4 +150,8 @@ func (m *BaseSessionManager) SetConnectFunc(cb func(addr string, session ISessio
 
 func (m *BaseSessionManager) PostEvent(event *SessionEvent) {
 	m.EventChan <- event
+}
+
+func (m *BaseSessionManager) SetPacketProcessor(p IPacketProcessor) {
+	m.Processor = p
 }

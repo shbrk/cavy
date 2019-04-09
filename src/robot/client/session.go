@@ -117,9 +117,9 @@ func (m *ClientSessionManager) HandleSessionClosedEvent(session net.ISession, er
 	m.RemoveSession(clientSession)
 }
 func (m *ClientSessionManager) HandleSessionPacketEvent(session net.ISession, pkt *net.Packet) {
-	clientSession, _ := session.(*ClientSession)
-	log.Info(clientSession.RemoteAddr())
-	//TODO 转发给后端服务器
+	if m.Processor != nil {
+		m.Processor.ProcessPacket(session, pkt)
+	}
 }
 
 func (m *ClientSessionManager) GetSession(id uint64) *ClientSession {

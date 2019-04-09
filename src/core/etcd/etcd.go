@@ -25,7 +25,6 @@ type Client struct {
 	ChanOut chan Event
 }
 
-
 func NewClient(cfg *Config) (*Client, error) {
 	var client = &Client{
 		timeout: DEFAULT_TIME_OUT,
@@ -105,7 +104,7 @@ func (c *Client) Watch(key string, withPrefix bool, onEventCallback func(err err
 				return
 			} else {
 				for _, e := range ws.Events {
-					event := &WatchEvent{Type: EventType(e.Type), Key: string(e.Kv.Key),Value:string(e.Kv.Value),Func: onEventCallback}
+					event := &WatchEvent{Type: EventType(e.Type), Key: string(e.Kv.Key), Value: string(e.Kv.Value), Func: onEventCallback}
 					c.ChanOut <- event
 				}
 			}

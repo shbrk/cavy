@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+var gNodeGate *NodeGate
+
 type NodeGate struct {
 	node.Base
 	etcdClient           *etcd.Client
@@ -26,7 +28,10 @@ type NodeGate struct {
 }
 
 func NewNodeGate(ctx context.Context, wg *sync.WaitGroup) *NodeGate {
-	return &NodeGate{Base: node.Base{Ctx: ctx, Wg: wg}}
+	if gNodeGate == nil {
+		gNodeGate = &NodeGate{Base: node.Base{Ctx: ctx, Wg: wg}}
+	}
+	return gNodeGate
 }
 
 func (n *NodeGate) Name() string {
